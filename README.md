@@ -39,7 +39,9 @@ Para executar o projeto em modo de depuração, utilize o OpenCD em conjunto com
 3. Na execução do GDB, execute os seguintes comandos:
 
 `(gdb) target extended-remote localhost:3333`
+
 `(gdb) monitor arm semihosting enable`
+
 `(gdb) continue`
 
 4. Pressione o botão de RESET da placa de desenvolvimento STM.
