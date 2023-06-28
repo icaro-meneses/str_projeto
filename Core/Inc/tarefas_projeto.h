@@ -10,8 +10,8 @@
 
 #include "main.h"
 
-#define CLOCK_WATCH_MAX_CHAR	10
-#define NET_MSG_BUFFER			30
+#define CLOCK_WATCH_MAX_CHAR	15
+#define NET_MSG_BUFFER_SIZE		40
 
 /* Template */
 void ledToggle(void *pvParameters);

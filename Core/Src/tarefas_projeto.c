@@ -12,6 +12,7 @@ extern TaskHandle_t taskTemperHandle;
 extern TaskHandle_t taskPresenHandle;
 extern TaskHandle_t taskGerLuzHandle;
 extern TaskHandle_t taskMonSegHandle;
+extern TaskHandle_t taskNetMsgHandle;
 
 /* Tarefas Aperiódicas */
 extern TaskHandle_t taskLuzPreHandle;
@@ -26,7 +27,7 @@ volatile uint8_t estadoOUTD = GPIO_PIN_RESET;
 extern SemaphoreHandle_t netMutex;
 
 /* Variáveis Compartilhadas */
-char networkMsgBuffer[NET_MSG_BUFFER + 1];
+char networkMsgBuffer[NET_MSG_BUFFER_SIZE + 1];
 
 /* Funções auxiliares */
 void ledToggle(void *pvParameters)
@@ -67,7 +68,7 @@ void toClockTime(TickType_t sysTicks, char* clk_string)
 	minutes = (sysTicks / (configTICK_RATE_HZ * 60)) % 60;
 	hours = (sysTicks / (configTICK_RATE_HZ * 3600)) % 24;
 
-	snprintf(clk_string, CLOCK_WATCH_MAX_CHAR+1,"%02u: %02u: %02u", hours, minutes, seconds);
+	snprintf(clk_string, CLOCK_WATCH_MAX_CHAR,"%02u: %02u: %02u", hours, minutes, seconds);
 }
 
 void initRandomValues(void)
@@ -100,9 +101,17 @@ void lerTemperatura(void* pvParameters)
 		printf("[TASK Temper] [time: %s] Temperatura: %02d\n", clockWatchBuf, temperValue);
 
 		/* Início da seção crítica */
+		if(xSemaphoreTake(netMutex, (TickType_t) portMAX_DELAY) == pdTRUE)
+		{
+			// Preenche o buffer de mensagem de rede
+			snprintf(networkMsgBuffer, NET_MSG_BUFFER_SIZE, "[time: %s] Temp: %02d", clockWatchBuf, temperValue);
+			vTaskDelay(10 * (configTICK_RATE_HZ / 1000));
+
+			xSemaphoreGive(netMutex);
+		}
 		/* Fim da seção crítica */
 
-		vTaskDelay(2000 * (configTICK_RATE_HZ / 1000));
+		vTaskDelay(3000 * (configTICK_RATE_HZ / 1000));
 	}
 }
 
@@ -269,7 +278,28 @@ void monitorarSeguranca(void* pvParameters)
 
 void enviarDadosViaRede(void* pvParameters)
 {
+	TickType_t timeStamp;
+	char clockWatchBuf[CLOCK_WATCH_MAX_CHAR + 1];
 
+	while(1)
+	{
+		timeStamp = xTaskGetTickCount();
+		toClockTime(timeStamp, clockWatchBuf);
+
+		/* Início da seção crítica */
+		if(xSemaphoreTake(netMutex, (TickType_t) portMAX_DELAY) == pdTRUE)
+		{
+			printf("[TASK NetMsg] [time: %s] Enviando Mensagem via rede: %s\n", clockWatchBuf, networkMsgBuffer);
+
+			// Limpeza do buffer
+			networkMsgBuffer[0] = '\0';
+
+			xSemaphoreGive(netMutex);
+		}
+		/* Fim da seção crítica */
+
+		vTaskDelay(2000 * (configTICK_RATE_HZ / 1000));
+	}
 }
 
 /* Tarefas Aperiódicas */
@@ -314,6 +344,9 @@ void ligarAlarme(void* pvParameters)
 			case 0:
 				printf("[TASK LigAla] [time: %s] ALARME ATIVO!\n", clockWatchBuf);
 
+				HAL_GPIO_TogglePin(OUTE_GPIO_Port, OUTE_Pin);
+				vTaskDelay(125 * (configTICK_RATE_HZ / 1000));
+
 				if (button_state == GPIO_PIN_SET)
 				{
 					/*Se o botão de segurança for pressionado, volta a
@@ -327,6 +360,7 @@ void ligarAlarme(void* pvParameters)
 				if (button_state == GPIO_PIN_RESET)
 				{
 					alarmLock = pdFALSE;
+					HAL_GPIO_WritePin(OUTE_GPIO_Port, OUTE_Pin, GPIO_PIN_RESET);
 					vTaskResume(taskMonSegHandle);
 					vTaskDelay(10 * (configTICK_RATE_HZ / 1000));
 					machine_state = 0;

@@ -60,6 +60,7 @@ TaskHandle_t taskTemperHandle = NULL;
 TaskHandle_t taskPresenHandle = NULL;
 TaskHandle_t taskGerLuzHandle = NULL;
 TaskHandle_t taskMonSegHandle = NULL;
+TaskHandle_t taskNetMsgHandle = NULL;
 
 /* Tarefas Aperiódicas */
 TaskHandle_t taskLuzPreHandle = NULL;
@@ -129,6 +130,11 @@ int main(void)
 			(void*) NULL,
 			tskIDLE_PRIORITY + 4UL,
 			&taskMonSegHandle);
+	xTaskCreate(enviarDadosViaRede, "taskNetMsg",
+				configMINIMAL_STACK_SIZE,
+				(void*) NULL,
+				tskIDLE_PRIORITY + 1UL,
+				&taskNetMsgHandle);
 
 	/* Tarefas Aperiódicas */
 	xTaskCreate(ligarLuzPresenca, "taskLuzPre",
