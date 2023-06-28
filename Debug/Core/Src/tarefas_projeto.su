@@ -1,0 +1,11 @@
+../Core/Src/tarefas_projeto.c:23:6:ledToggle	32	static
+../Core/Src/tarefas_projeto.c:53:6:toClockTime	32	static
+../Core/Src/tarefas_projeto.c:64:6:initRandomValues	16	static
+../Core/Src/tarefas_projeto.c:70:5:getRandomValue	24	static
+../Core/Src/tarefas_projeto.c:79:6:lerTemperatura	40	static
+../Core/Src/tarefas_projeto.c:97:6:monitorarPresenca	48	static
+../Core/Src/tarefas_projeto.c:142:6:gerenciarLuzes	64	static
+../Core/Src/tarefas_projeto.c:234:6:monitorarSeguranca	40	static
+../Core/Src/tarefas_projeto.c:279:6:enviarDadosViaRede	16	static
+../Core/Src/tarefas_projeto.c:283:6:ligarAlarme	16	static
+../Core/Src/tarefas_projeto.c:286:6:ligarLuzPresenca	72	static
