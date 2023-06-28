@@ -28,3 +28,18 @@ O projeto foi desenvolvido na IDE STMCubeIDE, fornecida pela STMicroelectronics,
 
 Para executar o projeto em modo de depuração, utilize o OpenCD em conjunto com o GDB para visualizar as mensagens das tarefas e depurar o código.
 
+1. Abra uma instância do OpenCD com o arquivo de configuração que está no diretório do projeto.
+
+`$ openocd -f str_projeto_debug.cfg `
+
+2. Abra uma instância do GDB para arquitetura ARM com o arquivo binário compilado .elf.
+
+`arm-none-eabi-gdb str_projeto.elf`
+
+3. Na execução do GDB, execute os seguintes comandos:
+
+`(gdb) target extended-remote localhost:3333`
+`(gdb) monitor arm semihosting enable`
+`(gdb) continue`
+
+4. Pressione o botão de RESET da placa de desenvolvimento STM.
