@@ -59,9 +59,14 @@ extern void initialise_monitor_handles(void);
 TaskHandle_t taskTemperHandle = NULL;
 TaskHandle_t taskPresenHandle = NULL;
 TaskHandle_t taskGerLuzHandle = NULL;
+TaskHandle_t taskMonSegHandle = NULL;
 
 /* Tarefas Aperiódicas */
 TaskHandle_t taskLuzPreHandle = NULL;
+TaskHandle_t taskLigAlaHandle = NULL;
+
+/* Semáforos */
+SemaphoreHandle_t netMutex;
 /* USER CODE END 0 */
 
 /**
@@ -119,6 +124,11 @@ int main(void)
 			(void*) NULL,
 			tskIDLE_PRIORITY + 2UL,
 			&taskGerLuzHandle);
+	xTaskCreate(monitorarSeguranca, "taskMonSeg",
+			configMINIMAL_STACK_SIZE,
+			(void*) NULL,
+			tskIDLE_PRIORITY + 4UL,
+			&taskMonSegHandle);
 
 	/* Tarefas Aperiódicas */
 	xTaskCreate(ligarLuzPresenca, "taskLuzPre",
@@ -126,6 +136,13 @@ int main(void)
 			(void*) NULL,
 			tskIDLE_PRIORITY + 3UL,
 			&taskLuzPreHandle);
+	xTaskCreate(ligarAlarme, "taskLigAla",
+			configMINIMAL_STACK_SIZE,
+			(void*) NULL,
+			tskIDLE_PRIORITY + 4UL,
+			&taskLigAlaHandle);
+
+	netMutex = xSemaphoreCreateMutex();
 
 	vTaskStartScheduler();
 

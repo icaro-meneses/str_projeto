@@ -11,15 +11,24 @@
 extern TaskHandle_t taskTemperHandle;
 extern TaskHandle_t taskPresenHandle;
 extern TaskHandle_t taskGerLuzHandle;
+extern TaskHandle_t taskMonSegHandle;
 
 /* Tarefas Aperiódicas */
 extern TaskHandle_t taskLuzPreHandle;
+extern TaskHandle_t taskLigAlaHandle;
 
 /* Variáveis Globais */
 TickType_t lastAltTimeD;
 TickType_t OUTDTime;
 volatile uint8_t estadoOUTD = GPIO_PIN_RESET;
 
+/* Semáforos */
+extern SemaphoreHandle_t netMutex;
+
+/* Variáveis Compartilhadas */
+char networkMsgBuffer[NET_MSG_BUFFER + 1];
+
+/* Funções auxiliares */
 void ledToggle(void *pvParameters)
 {
 	TickType_t timeStamp;
@@ -90,6 +99,9 @@ void lerTemperatura(void* pvParameters)
 
 		printf("[TASK Temper] [time: %s] Temperatura: %02d\n", clockWatchBuf, temperValue);
 
+		/* Início da seção crítica */
+		/* Fim da seção crítica */
+
 		vTaskDelay(2000 * (configTICK_RATE_HZ / 1000));
 	}
 }
@@ -153,21 +165,15 @@ void gerenciarLuzes(void* pvParameters)
 
 	BaseType_t notificacaoPresenca;
 
-	TickType_t OUTATime = configTICK_RATE_HZ * 60;    // 1 minuto em ticks
-	TickType_t OUTBTime = configTICK_RATE_HZ * 120;   // 2 minutos em ticks
-	TickType_t OUTCTime = configTICK_RATE_HZ * 240;   // 4 minutos em ticks
-	//TickType_t OUTDTime = configTICK_RATE_HZ * 480;   // 8 minutos em ticks
-
-	//TESTE
-	OUTDTime = configTICK_RATE_HZ * 480;
+	TickType_t OUTATime = configTICK_RATE_HZ * 60;		// 1 minuto em ticks
+	TickType_t OUTBTime = configTICK_RATE_HZ * 120;		// 2 minutos em ticks
+	TickType_t OUTCTime = configTICK_RATE_HZ * 240;		// 4 minutos em ticks
+	OUTDTime = configTICK_RATE_HZ * 480;				// 8 minutos em ticks
 
 	TickType_t lastAltTimeA = xTaskGetTickCount();
 	TickType_t lastAltTimeB = xTaskGetTickCount();
 	TickType_t lastAltTimeC = xTaskGetTickCount();
-	//TickType_t lastAltTimeD = xTaskGetTickCount();
 	lastAltTimeD = xTaskGetTickCount();
-
-	//TaskStatus_t presencaTaskInfo;
 
 	while(1)
 	{
@@ -201,20 +207,6 @@ void gerenciarLuzes(void* pvParameters)
 		/* Alternar o OUTD a cada 4 minutos ou se houver presença no
 		 * cômodo D, ligue OUTD sem alternar, caso esteja desligado */
 		notificacaoPresenca = ulTaskNotifyTake(pdTRUE, 0);
-		//		if(notificacaoPresenca && !estadoOUTD)
-		//		{
-		//			//Reiniciar o último registro de tempo
-		//			lastAltTimeD = xTaskGetTickCount();
-		//
-		//			vTaskGetInfo(taskPresenHandle, &presencaTaskInfo, pdTRUE, eInvalid);
-		//
-		//			estadoOUTD = GPIO_PIN_SET;
-		//			printf("[TASK gerLuz] [time: %s] Notificação de [%s] -> LIGAR Luz D\n",
-		//					clockWatchBuf, presencaTaskInfo.pcTaskName);
-		//			HAL_GPIO_WritePin(OUTD_GPIO_Port, OUTD_Pin, estadoOUTD);
-		//
-		//			OUTDTime = configTICK_RATE_HZ * 60;
-		//		}
 
 		if (!notificacaoPresenca && (timeStamp - lastAltTimeD) >= OUTDTime)
 		{
@@ -249,7 +241,7 @@ void monitorarSeguranca(void* pvParameters)
 		switch(machine_state)
 		{
 		case 0:
-			printf("[TASK Presen] [time: %s] Intruso Não Detectado\n", clockWatchBuf);
+			printf("[TASK monSeg] [time: %s] Intruso Não Detectado\n", clockWatchBuf);
 
 			if (button_state == GPIO_PIN_SET)
 			{
@@ -258,7 +250,8 @@ void monitorarSeguranca(void* pvParameters)
 			break;
 
 		case 1:
-			printf("[TASK Presen] [time: %s] Intruso Detectado -> ALARME ACIONADO\n", clockWatchBuf);
+			printf("[TASK monSeg] [time: %s] Intruso Detectado!\n", clockWatchBuf);
+			xTaskNotifyGive(taskLigAlaHandle);
 
 			if (button_state == GPIO_PIN_RESET)
 			{
@@ -270,18 +263,84 @@ void monitorarSeguranca(void* pvParameters)
 			break;
 		}
 
-		// Falta fazer essa tarefa acionar o alarme
-
 		vTaskDelay(250 * (configTICK_RATE_HZ / 1000));
 	}
 }
 
 void enviarDadosViaRede(void* pvParameters)
-{}
+{
+
+}
 
 /* Tarefas Aperiódicas */
 void ligarAlarme(void* pvParameters)
-{}
+{
+	TickType_t timeStamp;
+	char clockWatchBuf[CLOCK_WATCH_MAX_CHAR + 1];
+
+	GPIO_PinState button_state = GPIO_PIN_RESET;
+	uint8_t machine_state = 0;
+	uint8_t alarmLock = 0;
+
+	BaseType_t notificacaoSeguranca;
+
+	TaskStatus_t segurancaTaskInfo;
+
+	while(1)
+	{
+		timeStamp = xTaskGetTickCount();
+		toClockTime(timeStamp, clockWatchBuf);
+
+		notificacaoSeguranca = ulTaskNotifyTake(pdTRUE, 0);
+		vTaskGetInfo(taskMonSegHandle, &segurancaTaskInfo, pdTRUE, eInvalid);
+
+		if(notificacaoSeguranca)
+		{
+			/* Suspende a tarefa de monitorarSeguranca até apertar o
+			 * botao de seguranca outra vez */
+			printf("[TASK LigAla] [time: %s] Notificação de [%s] -> Ligar Alarme -> Suspender sensor\n",
+					clockWatchBuf, segurancaTaskInfo.pcTaskName);
+			vTaskSuspend(taskMonSegHandle);
+			vTaskDelay(10 * (configTICK_RATE_HZ / 1000));
+			alarmLock = pdTRUE;
+		}
+
+		if(alarmLock)
+		{
+			button_state = HAL_GPIO_ReadPin(BTNB_GPIO_Port, BTNB_Pin);
+
+			switch(machine_state)
+			{
+			case 0:
+				printf("[TASK LigAla] [time: %s] ALARME ATIVO!\n", clockWatchBuf);
+
+				if (button_state == GPIO_PIN_SET)
+				{
+					/*Se o botão de segurança for pressionado, volta a
+					 * monitorar segurança outra vez e desliga o alarme */
+					printf("[TASK LigAla] [time: %s] ALARME DESLIGADO!\n", clockWatchBuf);
+					machine_state = 1;
+				}
+				break;
+
+			case 1:
+				if (button_state == GPIO_PIN_RESET)
+				{
+					alarmLock = pdFALSE;
+					vTaskResume(taskMonSegHandle);
+					vTaskDelay(10 * (configTICK_RATE_HZ / 1000));
+					machine_state = 0;
+				}
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		vTaskDelay(250 * (configTICK_RATE_HZ / 1000));
+	}
+}
 
 void ligarLuzPresenca(void* pvParameters)
 {
